@@ -43,28 +43,52 @@ def ler_dados(arquivo):
     if secao_atual:
         secoes.append(secao_atual)
 
-    dados = {}
+    # Inicializar dados com chaves e estruturas padrão para garantir integridade
+    dados = {
+        'n_nos': 0,
+        'coords': {},
+        'n_materiais': 0,
+        'materiais': {},
+        'n_secoes': 0,
+        'secoes': {},
+        'n_elementos': 0,
+        'elementos': {},
+        'n_concentrados': 0,
+        'concentrados': {},
+        'n_distribuidos': 0,
+        'distribuidos': {},
+        'n_apoios': 0,
+        'apoios': {},
+        'n_apoios_elasticos': 0,
+        'apoios_elasticos': {},
+        'rotulas': {}
+    }
 
-    # --- Seção 0: Nós e coordenadas ---
-    _parse_nos(secoes[0], dados)
+    # Analisar cada seção com base em palavras-chave no cabeçalho
+    for sec in secoes:
+        if not sec:
+            continue
+        # Junta as primeiras linhas para identificar o conteúdo da seção
+        cabecalho = "\n".join(sec[:3]).lower()
 
-    # --- Seção 1: Materiais ---
-    _parse_materiais(secoes[1], dados)
-
-    # --- Seção 2: Seções transversais ---
-    _parse_secoes(secoes[2], dados)
-
-    # --- Seção 3: Elementos ---
-    _parse_elementos(secoes[3], dados)
-
-    # --- Seção 4: Esforços concentrados ---
-    _parse_concentrados(secoes[4], dados)
-
-    # --- Seção 5: Cargas distribuídas ---
-    _parse_distribuidos(secoes[5], dados)
-
-    # --- Seção 6: Apoios ---
-    _parse_apoios(secoes[6], dados)
+        if "coordenadas dos" in cabecalho or "nós (n)" in cabecalho or "nos (n)" in cabecalho:
+            _parse_nos(sec, dados)
+        elif "quantidade de materiais" in cabecalho or "características dos materiais" in cabecalho or "materiais" in cabecalho:
+            _parse_materiais(sec, dados)
+        elif "seções transversais" in cabecalho or "características das seções" in cabecalho or "secoes" in cabecalho or "seções" in cabecalho:
+            _parse_secoes(sec, dados)
+        elif "elementos de barras" in cabecalho or "vinculação das barras" in cabecalho or "vincula" in cabecalho:
+            _parse_elementos(sec, dados)
+        elif "esforços concentrados" in cabecalho or "esforos concentrados" in cabecalho or "concentrados" in cabecalho:
+            _parse_concentrados(sec, dados)
+        elif "carregamento distribuido" in cabecalho or "carregamentos distribuídos" in cabecalho or "distribuidos" in cabecalho or "distribuído" in cabecalho:
+            _parse_distribuidos(sec, dados)
+        elif "apoios elásticos" in cabecalho or "apoios elǭsticos" in cabecalho or "molas" in cabecalho:
+            _parse_apoios_elasticos(sec, dados)
+        elif "apoios" in cabecalho or "apoios rígidos" in cabecalho:
+            _parse_apoios(sec, dados)
+        elif "rótulas" in cabecalho or "rotulas" in cabecalho or "rótula" in cabecalho or "rotula" in cabecalho:
+            _parse_rotulas(sec, dados)
 
     return dados
 
@@ -201,3 +225,52 @@ def _parse_apoios(linhas, dados):
             except ValueError:
                 continue
     dados['apoios'] = apoios
+
+
+def _parse_apoios_elasticos(linhas, dados):
+    """Parseia a seção opcional de apoios elásticos (molas)."""
+    n_molas = _encontrar_inteiro(linhas)
+    dados['n_apoios_elasticos'] = n_molas if n_molas is not None else 0
+    apoios_elasticos = {}
+    for linha in linhas:
+        partes = linha.split()
+        if len(partes) == 4:
+            try:
+                no = int(partes[0])
+                kx = float(partes[1])
+                ky = float(partes[2])
+                kz = float(partes[3])
+                apoios_elasticos[no] = {'kx': kx, 'ky': ky, 'kz': kz}
+            except ValueError:
+                continue
+    dados['apoios_elasticos'] = apoios_elasticos
+
+
+def _parse_rotulas(linhas, dados):
+    """Parseia a seção opcional de liberação de rotação (rótulas) nas extremidades das barras."""
+    n_rot = _encontrar_inteiro(linhas)
+    rotulas = {}
+    
+    # Encontrar o índice da linha com n_rot para pular o cabeçalho
+    primeiro_idx = -1
+    for idx, linha in enumerate(linhas):
+        try:
+            if int(linha.strip()) == n_rot:
+                primeiro_idx = idx
+                break
+        except ValueError:
+            continue
+            
+    if primeiro_idx != -1:
+        for linha in linhas[primeiro_idx + 1:]:
+            partes = linha.split()
+            if len(partes) == 3:
+                try:
+                    elem_id = int(partes[0])
+                    rot_i = int(partes[1])
+                    rot_j = int(partes[2])
+                    rotulas[elem_id] = {'rot_i': rot_i, 'rot_j': rot_j}
+                except ValueError:
+                    continue
+    dados['rotulas'] = rotulas
+
